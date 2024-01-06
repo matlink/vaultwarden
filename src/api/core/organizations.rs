@@ -330,19 +330,6 @@ async fn get_org_collections_details(org_id: &str, headers: ManagerHeadersLoose,
     let has_full_access_to_org = user_org.access_all || has_full_access_via_group;
 
     for col in Collection::find_by_organization(org_id, &mut conn).await {
-        // check whether the current user has access to the given collection
-        let assigned = has_full_access_to_org
-            || CollectionUser::find_by_collection_and_user(&col.uuid, &user_org.user_uuid, &mut conn).await.is_some()
-            || (CONFIG.org_groups_enabled()
-                && GroupUser::has_access_to_collection_by_member(&col.uuid, &user_org.uuid, &mut conn).await);
-
-        // get the users assigned directly to the given collection
-        let users: Vec<Value> = coll_users
-            .iter()
-            .filter(|collection_user| collection_user.collection_uuid == col.uuid)
-            .map(|collection_user| SelectionReadOnly::to_collection_user_details_read_only(collection_user).to_json())
-            .collect();
-
         // get the group details for the given collection
         let groups: Vec<Value> = if CONFIG.org_groups_enabled() {
             CollectionGroup::find_by_collection(&col.uuid, &mut conn)
@@ -355,6 +342,19 @@ async fn get_org_collections_details(org_id: &str, headers: ManagerHeadersLoose,
         } else {
             Vec::with_capacity(0)
         };
+
+        // get the users assigned directly to the given collection
+        let users: Vec<Value> = coll_users
+            .iter()
+            .filter(|collection_user| collection_user.collection_uuid == col.uuid)
+            .map(|collection_user| SelectionReadOnly::to_collection_user_details_read_only(collection_user).to_json())
+            .collect();
+
+        // check whether the current user has access to the given collection
+        let assigned = has_full_access_to_org
+            || CollectionUser::find_by_collection_and_user(&col.uuid, &user_org.user_uuid, &mut conn).await.is_some()
+            || (CONFIG.org_groups_enabled()
+                && GroupUser::has_access_to_collection_by_member(&col.uuid, &user_org.uuid, &mut conn).await);
 
         let mut json_object = col.to_json();
         json_object["Assigned"] = json!(assigned);
